@@ -1,39 +1,118 @@
 package robot
 
+import (
+	"fmt"
+)
+
 // See defs.go for other definitions
 
 // Step 1
 var (
-	E Dir
-	S Dir
-	W Dir
-	N Dir
+	N Dir = 0
+	E Dir = 1
+	S Dir = 2
+	W Dir = 3
 )
 
 func Right() {
-	panic("Please implement the Right function")
+	Step1Robot.Dir = (Step1Robot.Dir + 1) % 4
 }
 
 func Left() {
-	panic("Please implement the Left function")
+	Step1Robot.Dir = (Step1Robot.Dir + 3) % 4
 }
 
 func Advance() {
-	panic("Please implement the Advance function")
+	switch Step1Robot.Dir {
+	case N:
+		Step1Robot.Y += 1
+	case S:
+		Step1Robot.Y -= 1
+	case E:
+		Step1Robot.X += 1
+	case W:
+		Step1Robot.X -= 1
+	}
 }
 
 func (d Dir) String() string {
-	panic("Please implement the String function")
+	return fmt.Sprintf("%d", d)
 }
 
-type Action struct{}
+type Action struct {
+	robot *Step2Robot
+	ok    bool
+}
+
+var robot Step2Robot
+
+func (r *Step2Robot) copy() Step2Robot {
+	return Step2Robot{
+		Dir: r.Dir,
+		Pos: r.Pos,
+	}
+}
+
+func (r *Step2Robot) advance() {
+	switch r.Dir {
+	case N:
+		r.Pos.Northing += 1
+	case S:
+		r.Pos.Northing -= 1
+	case E:
+		r.Pos.Easting += 1
+	case W:
+		r.Pos.Easting -= 1
+	}
+}
+
+func (r *Step2Robot) Left() {
+	r.Dir += 3
+	r.Dir %= 4
+}
+
+func (r *Step2Robot) Right() {
+	r.Dir += 1
+	r.Dir %= 4
+}
 
 func StartRobot(command chan Command, action chan Action) {
-	panic("Please implement the StartRobot function")
+	for c := range command {
+		switch c {
+		case 'A':
+			action <- Action{&robot, false}
+			if r := <-action; r.ok {
+				r.robot.advance()
+			}
+		case 'L':
+			(&robot).Left()
+		case 'R':
+			(&robot).Right()
+		case ' ':
+			robot.Dir = N
+			robot.Pos = Pos{1, 1}
+		}
+	}
 }
 
 func Room(extent Rect, robot Step2Robot, action chan Action, report chan Step2Robot) {
-	panic("Please implement the Room function")
+	for act := range action {
+		robot := act.robot.copy()
+		robot.advance()
+
+		if robot.Pos.Northing > extent.Max.Northing || robot.Pos.Northing < extent.Min.Northing {
+			continue
+		}
+
+		if robot.Pos.Easting > extent.Max.Easting || robot.Pos.Easting < extent.Min.Easting {
+			continue
+		}
+
+		act.robot.advance()
+	}
+	report <- robot
+	close(action)
+	close(report)
 }
 
 type Action3 struct{}
