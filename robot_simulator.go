@@ -40,78 +40,71 @@ func (d Dir) String() string {
 }
 
 type Action struct {
-	robot *Step2Robot
-	ok    bool
+	command Command
 }
 
 var robot Step2Robot
 
-func (r *Step2Robot) copy() Step2Robot {
-	return Step2Robot{
-		Dir: r.Dir,
-		Pos: r.Pos,
+func maxRU(a, b RU) RU {
+	if a > b {
+		return a
 	}
+	return b
 }
 
-func (r *Step2Robot) advance() {
+func minRU(a, b RU) RU {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func (r *Step2Robot) advance(rect Rect) {
 	switch r.Dir {
 	case N:
-		r.Pos.Northing += 1
+		r.Pos.Northing = minRU(r.Pos.Northing+1, rect.Max.Northing)
 	case S:
-		r.Pos.Northing -= 1
+		r.Pos.Northing = maxRU(r.Pos.Northing-1, rect.Min.Northing)
 	case E:
-		r.Pos.Easting += 1
+		r.Pos.Easting = minRU(r.Pos.Easting+1, rect.Max.Easting)
 	case W:
-		r.Pos.Easting -= 1
+		r.Pos.Easting = maxRU(r.Pos.Easting-1, rect.Min.Easting)
 	}
 }
 
 func (r *Step2Robot) Left() {
-	r.Dir += 3
-	r.Dir %= 4
+	r.Dir = (r.Dir + 3) % 4
 }
 
 func (r *Step2Robot) Right() {
-	r.Dir += 1
-	r.Dir %= 4
+	r.Dir = (r.Dir + 1) % 4
 }
 
 func StartRobot(command chan Command, action chan Action) {
+	robot.Dir = N
+	robot.Pos = Pos{1, 1}
+
 	for c := range command {
-		switch c {
+		action <- Action{c}
+	}
+	close(action)
+}
+
+func Room(extent Rect, _ Step2Robot, action chan Action, report chan Step2Robot) {
+	for act := range action {
+		switch act.command {
 		case 'A':
-			action <- Action{&robot, false}
-			if r := <-action; r.ok {
-				r.robot.advance()
-			}
+			robot.advance(extent)
 		case 'L':
-			(&robot).Left()
+			robot.Left()
 		case 'R':
-			(&robot).Right()
+			robot.Right()
 		case ' ':
 			robot.Dir = N
 			robot.Pos = Pos{1, 1}
 		}
 	}
-}
-
-func Room(extent Rect, robot Step2Robot, action chan Action, report chan Step2Robot) {
-	for act := range action {
-		robot := act.robot.copy()
-		robot.advance()
-
-		if robot.Pos.Northing > extent.Max.Northing || robot.Pos.Northing < extent.Min.Northing {
-			continue
-		}
-
-		if robot.Pos.Easting > extent.Max.Easting || robot.Pos.Easting < extent.Min.Easting {
-			continue
-		}
-
-		act.robot.advance()
-	}
 	report <- robot
-	close(action)
 	close(report)
 }
 

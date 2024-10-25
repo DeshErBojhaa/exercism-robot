@@ -1,8 +1,10 @@
-//go:build step2 || (!step1 && !step3)
+// //go:build step2 || (!step1 && !step3)
 
 package robot
 
-import "testing"
+import (
+	"testing"
+)
 
 var test2 = []struct {
 	Command
