@@ -9,11 +9,11 @@ import (
 // See defs.go for other definitions
 
 // Step 1
-var (
-	N Dir = 0
-	E Dir = 1
-	S Dir = 2
-	W Dir = 3
+const (
+	N Dir = iota
+	E
+	S
+	W
 )
 
 func Right() {
@@ -73,7 +73,6 @@ func minRU(a, b RU) RU {
 }
 
 func (r *Step2Robot) advance(rect Rect) {
-	//fmt.Printf("Initial Pos: %v => ", r.Pos)
 	switch r.Dir {
 	case N:
 		r.Pos.Northing = minRU(r.Pos.Northing+1, rect.Max.Northing)
@@ -84,19 +83,14 @@ func (r *Step2Robot) advance(rect Rect) {
 	case W:
 		r.Pos.Easting = maxRU(r.Pos.Easting-1, rect.Min.Easting)
 	}
-	//fmt.Printf("%v\n", r.Pos)
 }
 
 func (r *Step2Robot) Left() {
-	//fmt.Printf("Left: Initial Direction: %v => ", r.Dir)
 	r.Dir = (r.Dir + 3) % 4
-	//fmt.Printf("%v\n", r.Dir)
 }
 
 func (r *Step2Robot) Right() {
-	//fmt.Printf("Right: Initial Direction: %v => ", r.Dir)
 	r.Dir = (r.Dir + 1) % 4
-	//fmt.Printf("%v\n", r.Dir)
 }
 
 func StartRobot(command chan Command, action chan Action) {
@@ -132,23 +126,17 @@ type Action3 struct {
 	cmd  Command
 }
 
-var wg sync.WaitGroup
 var once sync.Once
 
 func StartRobot3(name, script string, action chan Action3, log chan string) {
-	//wg.Add(1)
 	for _, ch := range script {
 		action <- Action3{
 			name: name,
 			cmd:  Command(ch),
 		}
 	}
-	time.Sleep(time.Millisecond * 300)
-	//wg.Done()
-	//wg.Wait()
-
+	time.Sleep(time.Millisecond * 100)
 	once.Do(func() {
-		//fmt.Println("Closing channel: Action")
 		close(action)
 	})
 }
@@ -185,7 +173,6 @@ func Room3(extent Rect, robots []Step3Robot, action chan Action3, rep chan []Ste
 		switch act.cmd {
 		case 'A':
 			oldPos := robotPos[act.name]
-			//fmt.Printf("%v Advancing. Dir %s\n", act.name, r.Dir)
 			r.advance(extent)
 			if r.Pos.Northing == oldPos.Northing && r.Pos.Easting == oldPos.Easting {
 				log <- act.name + " bump into wall"
@@ -202,10 +189,8 @@ func Room3(extent Rect, robots []Step3Robot, action chan Action3, rep chan []Ste
 			}
 			robotPos[act.name] = r.Pos
 		case 'L':
-			//fmt.Printf("%v Turning Left. Initial %s\n", act.name, r.Dir)
 			r.Left()
 		case 'R':
-			//fmt.Printf("%v Turning Right. Initial %s\n", act.name, r.Dir)
 			r.Right()
 		case 'T':
 			continue
