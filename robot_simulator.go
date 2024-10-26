@@ -2,6 +2,8 @@ package robot
 
 import (
 	"fmt"
+	"sync"
+	"time"
 )
 
 // See defs.go for other definitions
@@ -36,7 +38,18 @@ func Advance() {
 }
 
 func (d Dir) String() string {
-	return fmt.Sprintf("%d", d)
+	switch d {
+	case N:
+		return "N"
+	case S:
+		return "S"
+	case E:
+		return "E"
+	case W:
+		return "W"
+	default:
+		return fmt.Sprintf("Dir(%d)", d)
+	}
 }
 
 type Action struct {
@@ -60,6 +73,7 @@ func minRU(a, b RU) RU {
 }
 
 func (r *Step2Robot) advance(rect Rect) {
+	//fmt.Printf("Initial Pos: %v => ", r.Pos)
 	switch r.Dir {
 	case N:
 		r.Pos.Northing = minRU(r.Pos.Northing+1, rect.Max.Northing)
@@ -70,14 +84,19 @@ func (r *Step2Robot) advance(rect Rect) {
 	case W:
 		r.Pos.Easting = maxRU(r.Pos.Easting-1, rect.Min.Easting)
 	}
+	//fmt.Printf("%v\n", r.Pos)
 }
 
 func (r *Step2Robot) Left() {
+	//fmt.Printf("Left: Initial Direction: %v => ", r.Dir)
 	r.Dir = (r.Dir + 3) % 4
+	//fmt.Printf("%v\n", r.Dir)
 }
 
 func (r *Step2Robot) Right() {
+	//fmt.Printf("Right: Initial Direction: %v => ", r.Dir)
 	r.Dir = (r.Dir + 1) % 4
+	//fmt.Printf("%v\n", r.Dir)
 }
 
 func StartRobot(command chan Command, action chan Action) {
@@ -108,12 +127,101 @@ func Room(extent Rect, _ Step2Robot, action chan Action, report chan Step2Robot)
 	close(report)
 }
 
-type Action3 struct{}
+type Action3 struct {
+	name string
+	cmd  Command
+}
+
+var wg sync.WaitGroup
+var once sync.Once
 
 func StartRobot3(name, script string, action chan Action3, log chan string) {
-	panic("Please implement the StartRobot3 function")
+	//wg.Add(1)
+	for _, ch := range script {
+		action <- Action3{
+			name: name,
+			cmd:  Command(ch),
+		}
+	}
+	time.Sleep(time.Millisecond * 300)
+	//wg.Done()
+	//wg.Wait()
+
+	once.Do(func() {
+		//fmt.Println("Closing channel: Action")
+		close(action)
+	})
 }
 
 func Room3(extent Rect, robots []Step3Robot, action chan Action3, rep chan []Step3Robot, log chan string) {
-	panic("Please implement the Room3 function")
+	once = sync.Once{}
+	rMap := make(map[string]*Step2Robot)
+	positions := make(map[Pos]struct{}, len(robots))
+	robotPos := make(map[string]Pos, len(robots))
+	for i, r := range robots {
+		if r.Name == "" {
+			log <- "no name"
+		}
+		if _, ok := rMap[r.Name]; ok {
+			log <- "duplicate name"
+		}
+		if r.Pos.Easting < extent.Min.Easting || r.Pos.Easting > extent.Max.Easting || r.Pos.Northing < extent.Min.Northing || r.Pos.Northing > extent.Max.Northing {
+			log <- "out side of room"
+		}
+		if _, ok := positions[r.Pos]; ok {
+			log <- "duplicate position"
+		}
+		positions[r.Pos] = struct{}{}
+		rMap[r.Name] = &robots[i].Step2Robot
+		robotPos[r.Name] = robots[i].Step2Robot.Pos
+	}
+
+	for act := range action {
+		r, ok := rMap[act.name]
+		if !ok {
+			log <- "invalid robot"
+			continue
+		}
+		switch act.cmd {
+		case 'A':
+			oldPos := robotPos[act.name]
+			//fmt.Printf("%v Advancing. Dir %s\n", act.name, r.Dir)
+			r.advance(extent)
+			if r.Pos.Northing == oldPos.Northing && r.Pos.Easting == oldPos.Easting {
+				log <- act.name + " bump into wall"
+			}
+			for k, v := range robotPos {
+				if k == act.name {
+					continue
+				}
+				if r.Pos == v {
+					log <- act.name + " bump into " + k
+					r.Pos = oldPos
+					break
+				}
+			}
+			robotPos[act.name] = r.Pos
+		case 'L':
+			//fmt.Printf("%v Turning Left. Initial %s\n", act.name, r.Dir)
+			r.Left()
+		case 'R':
+			//fmt.Printf("%v Turning Right. Initial %s\n", act.name, r.Dir)
+			r.Right()
+		case 'T':
+			continue
+		default:
+			log <- "invalid command"
+		}
+	}
+
+	ret := make([]Step3Robot, 0, len(robots))
+	for _, r := range robots {
+		ret = append(ret, Step3Robot{
+			Name:       r.Name,
+			Step2Robot: *rMap[r.Name],
+		})
+	}
+
+	rep <- ret
+	close(rep)
 }
